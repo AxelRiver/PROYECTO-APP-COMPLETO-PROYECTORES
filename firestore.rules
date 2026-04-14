@@ -1,0 +1,119 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (uid)
+    // Fields:
+    //   - uid: string (required)
+    //   - displayName: string
+    //   - email: string (required)
+    //   - role: string (enum: 'user', 'admin')
+    //   - createdAt: timestamp
+    //
+    // Collection: projectors
+    // Document ID: projectorId
+    // Fields:
+    //   - id: string (required)
+    //   - name: string (required)
+    //   - status: string (enum: 'available', 'reserved', 'maintenance', 'out-of-service')
+    //   - location: string
+    //   - roomId: string
+    //   - model: string
+    //   - resolution: string
+    //   - bulbHours: number
+    //   - serialNumber: string
+    //   - currentReservationId: string
+    //
+    // Collection: reservations
+    // Document ID: reservationId
+    // Fields:
+    //   - id: string (required)
+    //   - projectorId: string (required)
+    //   - userId: string (required)
+    //   - userName: string
+    //   - startTime: timestamp (required)
+    //   - endTime: timestamp
+    //   - status: string (enum: 'active', 'completed', 'cancelled')
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || 
+         request.auth.token.email == "axelrivera635@gmail.com");
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email']) &&
+             data.uid is string &&
+             data.email is string &&
+             data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+             (!('role' in data) || data.role in ['user', 'admin']);
+    }
+
+    function isValidProjector(data) {
+      return data.keys().hasAll(['id', 'name', 'status']) &&
+             data.id is string &&
+             data.name is string &&
+             data.name.size() < 100 &&
+             data.status in ['available', 'reserved', 'maintenance', 'out-of-service'];
+    }
+
+    function isValidReservation(data) {
+      return data.keys().hasAll(['projectorId', 'userId', 'status']) &&
+             data.projectorId is string &&
+             data.userId is string &&
+             data.status in ['active', 'completed', 'cancelled'];
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'user' || isAdmin());
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /projectors/{projectorId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin() && isValidProjector(request.resource.data);
+      // Allow users to update status when reserving/releasing
+      allow update: if isAuthenticated() && 
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'currentReservationId']) &&
+                    isValidProjector(request.resource.data);
+    }
+
+    match /reservations/{reservationId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && 
+                    request.resource.data.userId == request.auth.uid && 
+                    isValidReservation(request.resource.data);
+      allow update: if (isOwner(resource.data.userId) || isAdmin()) && 
+                    isValidReservation(request.resource.data);
+      allow delete: if isAdmin() || isOwner(resource.data.userId);
+    }
+
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "entities": {
+    "user": {
+      "title": "User",
+      "description": "User profile information.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "projector": {
+      "title": "Projector",
+      "description": "Projector details and status.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "status": { "type": "string", "enum": ["available", "reserved", "maintenance"] },
+        "location": { "type": "string" },
+        "roomId": { "type": "string" },
+        "model": { "type": "string" },
+        "resolution": { "type": "string" },
+        "bulbHours": { "type": "number" },
+        "serialNumber": { "type": "string" },
+        "currentReservationId": { "type": "string" }
+      },
+      "required": ["id", "name", "status"]
+    },
+    "reservation": {
+      "title": "Reservation",
+      "description": "Projector reservation record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectorId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "startTime": { "type": "string", "format": "date-time" },
+        "endTime": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["active", "completed", "cancelled"] }
+      },
+      "required": ["projectorId", "userId", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "user",
+      "description": "User collection."
+    },
+    "/projectors/{projectorId}": {
+      "schema": "projector",
+      "description": "Projectors collection."
+    },
+    "/reservations/{reservationId}": {
+      "schema": "reservation",
+      "description": "Reservations collection."
+    }
+  }
+}
